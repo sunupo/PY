@@ -1,0 +1,52 @@
+select length(week_teather)-length(regexp_replace(c.week_teather,',','')) from curriculadetail_bak20181219 c order by c.courseserial desc
+
+
+SELECT REGEXP_SUBSTR ('1,2,3', '[^,]+', 1,rownum)
+
+from dual connect by rownum<=LENGTH ('1,2,3') - LENGTH (regexp_replace('1,2,3', ',', ''))+1;
+
+select * from curriculadetail_bak20181219
+
+
+//出现了0,1,3,39，空；为什么会出现0（只有week，或者teacher），空（原来就为空）
+select (length(week_teather)-length(regexp_replace(c.week_teather,',',''))) lengthd from curriculadetail_bak20181219 c order by lengthd asc
+
+
+SELECT REGEXP_SUBSTR ((c.week_teather), '[^,]+', 1,rownum)
+from curriculadetail_bak20181219 c connect by rownum<=(length(week_teather)-length(regexp_replace(c.week_teather,',','')))+1;
+
+select * from curriculadetail_bak20181219
+
+
+------------------------------------------------
+select length(week_teather)-length(regexp_replace(c.week_teather,',','')) from curriculadetail_bak20181219 c order by c.courseserial desc
+
+
+SELECT REGEXP_SUBSTR ('1,2,3', '[^,]+', 1,rownum)
+
+from dual connect by rownum<=LENGTH ('1,2,3') - LENGTH (regexp_replace('1,2,3', ',', ''))+1;
+
+select * from curriculadetail_bak20181219
+
+
+//出现了0,1,3,39，空；为什么会出现0（只有week，或者teacher），空（原来就为空）
+select (length(week_teather)-length(regexp_replace(c.week_teather,',',''))) lengthd from curriculadetail_bak20181219 c order by lengthd asc
+
+SELECT REGEXP_SUBSTR ((c.week_teather), '[^,]+', 1,rownum)
+
+from curriculadetail_bak20181219 c connect by rownum<=(length(week_teather)-length(regexp_replace(c.week_teather,',','')))+1;
+
+DECLARE 
+  detailrow curriculadetail_bak20181219%ROWTYPE;
+  CURSOR detail_cur
+  IS select * from curriculadetail_bak20181219 c where c.week_teather is not null and substr(c.week_teather,-1,1)=',';
+BEGIN
+  OPEN detail_cur
+  LOOP
+   FETCH detail_cur
+    INTO detailrow
+    update curriculadetail_bak20181219 c set c.classteacherid=(select e.teacherid from eaclass e where e.classid=detailrow.classid)
+   EXIT WHEN detail_cur%NOTFOUND
+  END LOOP;
+  CLOSE detail_cur;
+END;
