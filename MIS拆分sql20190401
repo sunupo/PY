@@ -1,0 +1,154 @@
+/*
+week_teacher字段的内容大致分为以下6几类：
+空null
+1,,2,,3,,4,
+000180
+1,000154,2,000154,3,000154,6,000154,7,000154,8,000154,9,000154
+1,001486,2,001486,3,001486,4,001486,5,001486,6,001493,7,001493,8,009503
+1,014622,2,014622,3,014622,4,014622,5,014622,6,018184,7,018184,8,018184
+*/
+/*
+1,,2,,3,,4,
+select * from curriculadetail_bak20181219 c where c.week_teather is not null and substr(c.week_teather,-1,1)=','
+*/
+/*
+000180
+select * from CURRICULADETAIL_bak20181219 t where length(t.week_teather)=6 order by length(t.week_teather)
+update curriculadetail_bak20181219 t set t.week_teather='2,000180,3,000180,4,000180,6,000180,7,000180,8,000180,9,000180,10,000180' where t.week_teather='000180'
+select * from curriculadetail_bak20181219 t where t.week_teather='2,000180,3,000180,4,000180,6,000180,7,000180,8,000180,9,000180,10,000180'
+*/
+/*
+针对后面三种情况（字段week_teacher多位老师，但是老师都是按顺序出现的，未出现交叉情况）：1,001486,2,001486,3,001486,4,001486,5,001486,6,001493,7,001493,8,009503
+select * from curriculadetail_bak20181219 c where c.week_teather is not null and substr(c.week_teather,-1,1)!=','
+*/
+DECLARE 
+  d_count INTEGER;
+  c_teacheridold VARCHAR(10);
+  c_teacheridnew VARCHAR(10);
+  temp_week VARCHAR(100);
+  teacherid2 VARCHAR(10);
+  weekid VARCHAR(10);
+  teacherid2i VARCHAR(10);
+  detailrow curriculadetail_bak20181219%ROWTYPE;
+  CURSOR detail_cur
+  IS select * from curriculadetail_bak20181219 c where c.week_teather is not null and substr(c.week_teather,-1,1)!=',';
+BEGIN
+  OPEN detail_cur;
+  LOOP
+    /*从游标取出一行*/
+   FETCH detail_cur
+    INTO detailrow;
+    /*计算该行的week_teacher字段内容有多少个逗号，通过逗号数数目可以判断有多少个<week，teacher>组*/
+   d_count := length(detailrow.week_teather)-length(regexp_replace(detailrow.week_teather,',',''));
+   SELECT REGEXP_SUBSTR (c.week_teather,'[^,]+', 1,2) into teacherid2 from curriculadetail_bak20181219 c where c.detail_id=detailrow.detail_id;
+   c_teacheridold :=  teacherid2;
+  
+  /* c_teacheridold := SELECT REGEXP_SUBSTR (c.week_teather, '[^,]+', 1,2) from curriculadetail_bak20181219 c where c.default_id=detailrow.detail_id;*/
+   /*由于week_teacher字段的teacher数据在偶数个位置，所以可以把i最大值取为(d_count+1)/2，通过REGEXP_SUBSTR函数（逗号分隔）取到第2*i个数据（这就是teacherid）*/
+   
+   /*1,008,2,008,3,008一个老师*/
+   /*1,008,2,008,3,008,4,009,5,009,6,009两个老师*/
+   /*1,008,2,008,3,008,4,009,5,009,6,009,7,011,8,011,9,011三个老师*/
+   FOR i IN 1 .. (d_count+1)/2
+   /*还要给老师去重，原来的行有多个老师时，插入的行还需要把week做更改*/
+   /*该for loop循环是提取出每一行的teacherid，插入新的一行*/
+   LOOP   
+     /*获取teacherid对应的week，用concat方法把新的<week,>追加保存在temp_week中*/
+     SELECT REGEXP_SUBSTR (c.week_teather, '[^,]+', 1,2*i-1) into weekid from curriculadetail_bak20181219 c where c.detail_id=detailrow.detail_id;
+     temp_week := CONCAT(temp_week,CONCAT(weekid,','));
+     
+     SELECT REGEXP_SUBSTR (c.week_teather, '[^,]+', 1,2*i) into teacherid2i from curriculadetail_bak20181219 c where c.detail_id=detailrow.detail_id;
+     c_teacheridnew :=teacherid2i;  
+     /*当只有一个老师或者最后一个老师，循环结束后插入执行插入操作，插入第一个老师的teacherid；多个老师时，第一位老师和最后一位老师之间的老师,
+     当c_teacheridnew！=c_teacheridold，就执行插入，并把c_teacheridold赋值为c_teacheridnew；；*/
+     IF c_teacheridnew != c_teacheridold 
+       THEN
+         /*去除temp_week末尾的逗号,如果第四周是第二个老师，那么周次4也被加到了temp_week，需要删除后面三个字符<逗号4逗号><,4,>*/
+         /*temp_week := substr(temp_week,0,length(temp_week)-3);*/
+         /*怎样把从序列中取得的主键，插入进去*/
+         INSERT INTO curriculadetail_bak20181219 (courseserial,week,classroom,timespan,detail_id,status,change_time,iseaclassid,classid,classunit,week_teather,classteacherid )
+                SELECT c.courseserial,substr(temp_week,0,length(temp_week)-3),c.classroom,c.timespan,
+                s_curricula_serial.NEXTVAL,c.status,c.change_time,c.iseaclassid,c.classid,c.classunit,c.week_teather, c_teacheridold
+                from curriculadetail_bak20181219 c where c.detail_id=detailrow.detail_id;
+         /*插入一条数据之后，初始化temp_week，因为是周次为4进入的IF语句，4是下个老师的上课周次，所以需要把temp_week初始化为最后两个字符<周次4+逗号>，记录下一个老师的temp_week*/
+         temp_week := substr(temp_week,length(temp_week)-2,length(temp_week));
+         /*插入一个老师过后，把c_teacheridold改为下一个老师*/
+         c_teacheridold:=c_teacheridnew;
+
+     END IF;
+   END LOOP;
+   
+   
+   /*只有一个老师或者多个老师中的最后一个老师，需在循环之后才能添加进去。只有第一个老师，在上面的loop循环中temp_week也已经保存好了第一个老师的上课周次week的信息
+   比如第3个老师：c_teacheridold取到第三个老师的teacherid之后（c_teacheridold=c_teacheridnew），才插入关于第二个老师数据的新行*/
+    temp_week := substr(temp_week,0,length(temp_week)-1);
+    INSERT INTO curriculadetail_bak20181219 (courseserial,week,classroom,timespan,detail_id,status,change_time,iseaclassid,classid,classunit,week_teather,classteacherid )
+                SELECT c.courseserial,temp_week,c.classroom,c.timespan,
+                s_curricula_serial.NEXTVAL,c.status,c.change_time,c.iseaclassid,c.classid,c.classunit,c.week_teather, c_teacheridold
+                from curriculadetail_bak20181219 c where c.detail_id=detailrow.detail_id;  
+    temp_week := '';
+   EXIT WHEN detail_cur%NOTFOUND;
+  END LOOP;
+  CLOSE detail_cur;
+END;
+/*
+没有teacherid，通过eaclass表和curriculadetail_bak20181219表的classid相同的地方，把eaclass.teacherid赋值给curriculadetail_bak20181219.classteacherid
+select * from eaclass e,curriculadetail_bak20181219 c where e.classid=c.classid
+默认从表查询为
+1,,2,,3,,4,
+select * from curriculadetail_bak20181219 c where c.week_teather is not null and substr(c.week_teather,-1,1)=','
+*/
+/*
+update curriculadetail_bak20181219 c set c.classteacherid='';
+
+DECLARE 
+  detailrow curriculadetail_bak20181219%ROWTYPE;
+  CURSOR detail_cur
+  IS select * from curriculadetail_bak20181219 c where c.week_teather is not null and substr(c.week_teather,-1,1)=',' ;
+BEGIN
+  OPEN detail_cur;
+  LOOP
+   FETCH detail_cur
+    INTO detailrow;
+    update curriculadetail_bak20181219 c set c.classteacherid=(select e.teacherid from eaclass e where e.classid=detailrow.courseserial) where c.detail_id=detailrow.detail_id;
+   EXIT WHEN detail_cur%NOTFOUND;
+  END LOOP;
+  CLOSE detail_cur;
+END;
+*/
+
+/*c.week_teather is  null*/
+/*
+DECLARE 
+  detailrow curriculadetail_bak20181219%ROWTYPE;
+  CURSOR detail_cur
+  IS select * from curriculadetail_bak20181219 c where c.week_teather is  null ;
+BEGIN
+  OPEN detail_cur;
+  LOOP
+   FETCH detail_cur
+    INTO detailrow;
+    update curriculadetail_bak20181219 c set c.classteacherid=(select e.teacherid from eaclass e where e.classid=detailrow.courseserial) where c.detail_id=detailrow.detail_id;
+   EXIT WHEN detail_cur%NOTFOUND;
+  END LOOP;
+  CLOSE detail_cur;
+END;
+select *  from curriculadetail_bak20181219 c where c.week_teather is  null ;
+*/
+
+
+DECLARE 
+  d_count INTEGER;
+  stuseriall student%ROWTYPE;
+  CURSOR detail_cur
+  IS select * from student t where t.stuserial is not null and rownum<100;
+BEGIN
+  OPEN detail_cur;
+  LOOP
+    FETCH detail_cur
+     INTO stuseriall;
+    DBMS_OUTPUT.put_line ('111:' || stuseriall.stuserial);
+    EXIT WHEN detail_cur%NOTFOUND;
+  END LOOP;
+  CLOSE detail_cur;
+END;
