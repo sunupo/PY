@@ -1,0 +1,51 @@
+查看当前的论文出版可选年限有哪些
+select distinct magpubyear from magazine order by magpubyear desc
+
+select * from magazine where magpubyear=2018
+
+
+把2018年的出版论文信息拷贝到magazine_sun2019 表
+create table magazine_sun2019 as select * from magazine m where m.magpubyear=2018
+把magazine_sun2019表的magpubyear改为2019
+update  magazine_sun2019 m set m.magpubyear=2019 where m.magpubyear=2018
+
+把把magazine_sun2019表的magpubyear=2019的行追加到magazine表
+insert into magazine  select 
+s_magazine.nextval,
+m.magcode,
+m.magname,
+m.magclass,
+m.beginyear,
+m.beginmonth,
+m.endyear,
+m.endmonth,
+m.typecode,
+m.cssci,
+m.cscd,
+
+m.cscdmain,
+m.highlevel,
+m.secmagname,
+
+m.scimain,
+m.sciexp,
+m.scicd,
+m.eimain,
+m.eiexp,
+m.ssci,
+m.ahci,
+m.overseas,
+m.english,
+m.firstprop,
+
+m.credit,
+m.mldm,
+2019,
+m.magname_en,
+m.partition,
+m.sf_qwqk,
+m.sf_zyqk,
+m.sf_fxrd,
+m.secondprop,m.sf_jxrd,m.sf_jgrd,m.sf_jiangrd,m.utd,m.ft,m.ccf,
+m.xkpgalevel,m.jsc,m.thirdprop_rw,m.thirdprop_lk,m.thirdprop_gk
+from magazine_sun2019 m where m.magpubyear=2019
